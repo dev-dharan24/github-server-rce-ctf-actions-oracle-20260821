@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Test session-id capability boundary
+      - name: Test duplicate session-id capability boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -30,7 +30,7 @@ jobs:
           run_push() {
             local label="$1"
             local parent_sid="$2"
-            local probe_ref="refs/heads/oracle/dup-cap-${label}-${GITHUB_RUN_ID}"
+            local probe_ref="refs/heads/oracle/dup-session-${label}-${GITHUB_RUN_ID}"
 
             set +e
             GIT_TRACE2_PARENT_SID="$parent_sid" \
@@ -53,7 +53,7 @@ jobs:
           }
 
           run_push control 'ctf-control'
-          run_push duplicate_safe 'ctf agent=git/2.53'
-          run_push duplicate_probe 'ctf agent=git/2.53;ctf_probe=bool:true'
-          run_push duplicate_operator_false 'ctf agent=git/2.53;user_operator_mode=bool:false'
-          run_push duplicate_operator_true 'ctf agent=git/2.53;user_operator_mode=bool:true'
+          run_push duplicate_session_safe 'ctf session-id=ctf-second'
+          run_push duplicate_session_probe 'ctf session-id=ctf-second;ctf_probe=bool:true'
+          run_push duplicate_session_operator_false 'ctf session-id=ctf-second;user_operator_mode=bool:false'
+          run_push duplicate_session_operator_true 'ctf session-id=ctf-second;user_operator_mode=bool:true'
