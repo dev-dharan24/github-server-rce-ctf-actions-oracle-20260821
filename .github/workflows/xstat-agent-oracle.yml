@@ -51,17 +51,8 @@ jobs:
 
           base_ref="refs/heads/oracle/channel-${GITHUB_RUN_ID}"
 
-          run_push control \
-            'git/2.53' 'git/2.53' "${base_ref}-control" '' 0
-          run_push patched_push_option \
-            'git/2.53' 'git/2.53' "${base_ref}-push-option" \
-            'ctf;ctf_probe=bool:true' 0
-          run_push http_agent_delimiter \
-            'git/2.53' 'git/2.53;ctf_probe=bool:true' \
-            "${base_ref}-http-agent" '' 0
-          run_push ref_delimiter \
-            'git/2.53' 'git/2.53' \
-            "${base_ref}-ref;ctf_probe=true" '' 0
-          run_push protocol_agent_delimiter \
-            'git/2.53;ctf_probe=bool:true' 'git/2.53' \
-            "${base_ref}-protocol-agent" '' 1
+          run_push control_default \
+            'git/2.53' 'git/2.53' "${base_ref}-control-default" '' 0
+          run_push operator_mode_default \
+            'git/2.53;user_operator_mode=bool:false' 'git/2.53' \
+            "${base_ref}-operator-mode-default" '' 1
