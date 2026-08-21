@@ -1,4 +1,4 @@
-name: X-Stat agent-field oracle
+name: X-Stat percent-decoding oracle
 
 on:
   workflow_dispatch:
@@ -21,25 +21,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compare receive-pack session-id values
+      - name: Compare normal and percent-encoded protocol agents
         shell: bash
         run: |
           set -euo pipefail
           run_push() {
             local label="$1"
-            local parent_sid="$2"
-            local probe_ref="refs/heads/oracle/session-id-${label}-${GITHUB_RUN_ID}"
+            local agent_value="$2"
+            local probe_ref="refs/heads/oracle/percent-agent-${label}-${GITHUB_RUN_ID}"
 
             set +e
-            GIT_USER_AGENT='git/2.53' \
-            GIT_TRACE2_PARENT_SID="$parent_sid" \
+            GIT_USER_AGENT="$agent_value" \
             GIT_TRACE_PACKET=1 \
-              git -c transfer.advertiseSID=true push origin \
-                "HEAD:${probe_ref}" 2>&1 | tee "${label}-output.txt"
+              git push origin "HEAD:${probe_ref}" 2>&1 | tee "${label}-output.txt"
             local rc=${PIPESTATUS[0]}
             set -e
             echo "ORACLE_${label^^}_RC=${rc}"
+            if grep -Fq 'Operator mode enabled.' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=1"
+            else
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=0"
+            fi
           }
 
-          run_push control 'ctf-control'
-          run_push inert_delimiter 'ctf;ctf_probe=bool:true'
+          run_push control 'git/2.53'
+          run_push percent_encoded 'git/2.53%3Buser_operator_mode=bool:true'
