@@ -1,0 +1,38 @@
+name: X-Stat agent-field oracle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/xstat-agent-oracle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the owned CTF repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Send a harmless protocol-agent delimiter oracle
+        shell: bash
+        env:
+          GIT_USER_AGENT: git/2.53;user_operator_mode=bool:true
+        run: |
+          set -euo pipefail
+          probe_ref="refs/heads/oracle/xstat-agent-${GITHUB_RUN_ID}"
+          git push origin "HEAD:${probe_ref}" 2>&1 | tee push-output.txt
+
+          if grep -Fq 'Operator mode enabled.' push-output.txt; then
+            echo 'XSTAT_AGENT_INJECTION=OBSERVED'
+            exit 2
+          fi
+
+          echo 'XSTAT_AGENT_INJECTION=NOT_OBSERVED'
