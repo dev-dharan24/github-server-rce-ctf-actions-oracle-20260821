@@ -1,0 +1,63 @@
+name: Build dumb-HTTP importer fixture
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/importer-alternates-fixture.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the owned CTF repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate static primary and alternate repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="dumb-http-fixture"
+          fixture_stage="$(mktemp -d)"
+          trap 'rm -rf "$fixture_stage"' EXIT
+
+          rm -rf "$fixture_root"
+          mkdir -p "$fixture_root/primary" "$fixture_root/alternate"
+          git init --bare "$fixture_stage/source.git"
+          git -C . config user.name 'CTF Oracle'
+          git -C . config user.email 'ctf-oracle@example.invalid'
+
+          blob="$(printf 'owned importer alternate oracle\n' |
+            git --git-dir="$fixture_stage/source.git" hash-object -w --stdin)"
+          tree="$(printf '100644 blob %s\tORACLE.txt\n' "$blob" |
+            git --git-dir="$fixture_stage/source.git" mktree)"
+          commit="$(printf 'dumb HTTP importer alternate oracle\n' |
+            GIT_AUTHOR_NAME='CTF Oracle'             GIT_AUTHOR_EMAIL='ctf-oracle@example.invalid'             GIT_COMMITTER_NAME='CTF Oracle'             GIT_COMMITTER_EMAIL='ctf-oracle@example.invalid'             git --git-dir="$fixture_stage/source.git" commit-tree "$tree")"
+
+          git --git-dir="$fixture_stage/source.git" update-ref refs/heads/main "$commit"
+          git --git-dir="$fixture_stage/source.git" symbolic-ref HEAD refs/heads/main
+          git --git-dir="$fixture_stage/source.git" update-server-info
+
+          for target in primary alternate; do
+            cp "$fixture_stage/source.git/HEAD" "$fixture_root/$target/HEAD"
+            mkdir -p "$fixture_root/$target/info"
+            cp "$fixture_stage/source.git/info/refs" "$fixture_root/$target/info/refs"
+            cp -R "$fixture_stage/source.git/objects" "$fixture_root/$target/objects"
+          done
+
+          rm "$fixture_root/primary/objects/${blob:0:2}/${blob:2}"
+          rm "$fixture_root/primary/objects/${tree:0:2}/${tree:2}"
+          printf '%s\n'             'https://raw.githubusercontent.com/dev-dharan24/github-server-rce-ctf-actions-oracle-20260821/main/dumb-http-fixture/alternate/objects'             > "$fixture_root/primary/objects/info/http-alternates"
+
+          git add -f "$fixture_root"
+          git commit -m 'Add harmless dumb-HTTP importer fixture'
+          git push origin HEAD:main
+          printf 'FIXTURE_COMMIT=%s\n' "$commit"
