@@ -21,24 +21,47 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run a control and an inert delimiter differential
+      - name: Compare attacker-controlled receive-pack metadata channels
         shell: bash
         run: |
           set -euo pipefail
           run_push() {
             local label="$1"
-            local agent="$2"
-            local probe_ref="refs/heads/oracle/${label}-${GITHUB_RUN_ID}"
+            local protocol_agent="$2"
+            local http_agent="$3"
+            local probe_ref="$4"
+            local push_option="$5"
+            local trace_packet="$6"
+            local -a push_args=(push origin "HEAD:${probe_ref}")
+
+            if [[ -n "$push_option" ]]; then
+              push_args=(push --push-option="$push_option" origin \
+                "HEAD:${probe_ref}")
+            fi
 
             set +e
-            GIT_USER_AGENT="$agent" git push origin "HEAD:${probe_ref}" \
-              2>&1 | tee "${label}-output.txt"
+            GIT_USER_AGENT="$protocol_agent" \
+            GIT_HTTP_USER_AGENT="$http_agent" \
+            GIT_TRACE_PACKET="$trace_packet" \
+              git "${push_args[@]}" 2>&1 | tee "${label}-output.txt"
             local rc=${PIPESTATUS[0]}
             set -e
             echo "ORACLE_${label^^}_RC=${rc}"
           }
 
-          # Both values are valid Git protocol agents. The second field name
-          # is intentionally unknown and has no server-side semantics.
-          run_push control 'git/2.53'
-          run_push inert_delimiter 'git/2.53;ctf_probe=bool:true'
+          base_ref="refs/heads/oracle/channel-${GITHUB_RUN_ID}"
+
+          run_push control \
+            'git/2.53' 'git/2.53' "${base_ref}-control" '' 0
+          run_push patched_push_option \
+            'git/2.53' 'git/2.53' "${base_ref}-push-option" \
+            'ctf;ctf_probe=bool:true' 0
+          run_push http_agent_delimiter \
+            'git/2.53' 'git/2.53;ctf_probe=bool:true' \
+            "${base_ref}-http-agent" '' 0
+          run_push ref_delimiter \
+            'git/2.53' 'git/2.53' \
+            "${base_ref}-ref;ctf_probe=true" '' 0
+          run_push protocol_agent_delimiter \
+            'git/2.53;ctf_probe=bool:true' 'git/2.53' \
+            "${base_ref}-protocol-agent" '' 1
