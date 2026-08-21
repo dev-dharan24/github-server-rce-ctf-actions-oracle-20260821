@@ -21,18 +21,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Send a harmless protocol-agent delimiter oracle
+      - name: Run a control and an inert delimiter differential
         shell: bash
-        env:
-          GIT_USER_AGENT: git/2.53;user_operator_mode=bool:true
         run: |
           set -euo pipefail
-          probe_ref="refs/heads/oracle/xstat-agent-${GITHUB_RUN_ID}"
-          git push origin "HEAD:${probe_ref}" 2>&1 | tee push-output.txt
+          run_push() {
+            local label="$1"
+            local agent="$2"
+            local probe_ref="refs/heads/oracle/${label}-${GITHUB_RUN_ID}"
 
-          if grep -Fq 'Operator mode enabled.' push-output.txt; then
-            echo 'XSTAT_AGENT_INJECTION=OBSERVED'
-            exit 2
-          fi
+            set +e
+            GIT_USER_AGENT="$agent" git push origin "HEAD:${probe_ref}" \
+              2>&1 | tee "${label}-output.txt"
+            local rc=${PIPESTATUS[0]}
+            set -e
+            echo "ORACLE_${label^^}_RC=${rc}"
+          }
 
-          echo 'XSTAT_AGENT_INJECTION=NOT_OBSERVED'
+          # Both values are valid Git protocol agents. The second field name
+          # is intentionally unknown and has no server-side semantics.
+          run_push control 'git/2.53'
+          run_push inert_delimiter 'git/2.53;ctf_probe=bool:true'
