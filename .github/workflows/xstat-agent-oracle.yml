@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compare normal and percent-encoded protocol agents
+      - name: Compare percent-encoding normalization cases
         shell: bash
         run: |
           set -euo pipefail
@@ -45,4 +45,6 @@ jobs:
           }
 
           run_push control 'git/2.53'
-          run_push percent_encoded 'git/2.53%3Buser_operator_mode=bool:true'
+          run_push percent_safe 'git/2.53%41'
+          run_push percent_semicolon 'git/2.53%3Bctf_probe=bool:true'
+          run_push double_encoded 'git/2.53%253Buser_operator_mode=bool:true'
