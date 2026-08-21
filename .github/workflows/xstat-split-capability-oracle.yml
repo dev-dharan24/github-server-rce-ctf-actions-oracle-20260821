@@ -1,0 +1,61 @@
+name: X-Stat split-capability oracle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/xstat-split-capability-oracle.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the owned CTF repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test split unknown capability with one equals
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config transfer.advertiseSID true
+
+          run_push() {
+            local label="$1"
+            local parent_sid="$2"
+            local probe_ref="refs/heads/oracle/split-cap-${label}-${GITHUB_RUN_ID}"
+
+            set +e
+            GIT_TRACE2_PARENT_SID="$parent_sid" \
+            GIT_TRACE_PACKET=1 \
+              git push origin "HEAD:${probe_ref}" 2>&1 | tee "${label}-output.txt"
+            local rc=${PIPESTATUS[0]}
+            set -e
+
+            echo "ORACLE_${label^^}_RC=${rc}"
+            if grep -Fq 'no voting servers succeeded' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_VOTING_REJECTION=1"
+            else
+              echo "ORACLE_${label^^}_VOTING_REJECTION=0"
+            fi
+            if grep -Fq 'Operator mode enabled.' "${label}-output.txt"; then
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=1"
+              exit 42
+            else
+              echo "ORACLE_${label^^}_OPERATOR_OUTPUT=0"
+            fi
+          }
+
+          run_push control 'ctf-control'
+          run_push unknown_safe 'ctf ctf_unknown=marker;tail'
+          run_push raw_semicolon_no_equal 'ctf ctf;ctf_probe;tail'
+          run_push generic_field 'ctf ctf;ctf_probe=bool:true;tail'
+          run_push operator_false 'ctf ctf;user_operator_mode=bool:false;tail'
+          run_push operator_true 'ctf ctf;user_operator_mode=bool:true;tail'
